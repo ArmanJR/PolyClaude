@@ -9,18 +9,54 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/config"
 	"github.com/armanjr/polyclaude/internal/tui"
+	"github.com/armanjr/polyclaude/internal/updater"
 )
 
 var version = "dev"
 
+func printUsage() {
+	fmt.Printf(`PolyClaude %s
+Schedule multiple Claude Code Pro accounts to minimize rate-limit downtime.
+
+Usage:
+  polyclaude              Launch the interactive setup wizard
+  polyclaude update       Download and install the latest version
+  polyclaude --dry-run    Preview the wizard without making changes
+  polyclaude --version    Print version and exit
+  polyclaude --help       Show this help
+`, version)
+}
+
 func main() {
-	showVersion := flag.Bool("version", false, "Print version and exit")
-	dryRun := flag.Bool("dry-run", false, "Walk through the wizard without making any changes")
+	// Handle "update" subcommand before flag parsing
+	if len(os.Args) > 1 && os.Args[1] == "update" {
+		if err := updater.SelfUpdate(version); err != nil {
+			fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Handle flags manually for clean help output
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-version":
+			fmt.Println("polyclaude " + version)
+			os.Exit(0)
+		case "--help", "-help", "-h":
+			printUsage()
+			os.Exit(0)
+		}
+	}
+
+	dryRun := flag.Bool("dry-run", false, "")
+	flag.Usage = printUsage
 	flag.Parse()
 
-	if *showVersion {
-		fmt.Println("polyclaude " + version)
-		os.Exit(0)
+	// Check for updates (cached, non-blocking)
+	homeDir, _ := config.DefaultHomeDir()
+	if latest := updater.CheckCached(version, homeDir); latest != "" {
+		fmt.Printf("Update available: v%s -> %s (run `polyclaude update` to upgrade)\n\n", version, latest)
 	}
 
 	// Set up debug logging to file (bubbletea owns the terminal)
@@ -34,7 +70,6 @@ func main() {
 	slog.Info("starting polyclaude", "dry_run", *dryRun)
 
 	// Check for existing config
-	homeDir, _ := config.DefaultHomeDir()
 	if config.Exists(homeDir) && !*dryRun {
 		fmt.Print("Existing configuration found at " + config.ConfigPath(homeDir) + "\n")
 		fmt.Print("Start fresh? [Y/n] ")

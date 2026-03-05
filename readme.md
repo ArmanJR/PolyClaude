@@ -61,28 +61,19 @@ Both strategies achieve the same total coding time. They differ in how cooldown 
 
 ## Installation
 
-Requires [Go 1.26+](https://go.dev/dl/) and the [Claude CLI](https://docs.anthropic.com/en/docs/claude-code).
+Requires the [Claude CLI](https://docs.anthropic.com/en/docs/claude-code).
 
 ```sh
-go install github.com/armanjr/polyclaude@latest
+curl -sSfL https://raw.githubusercontent.com/ArmanJR/PolyClaude/main/install.sh | sh
 ```
 
-Or build from source:
-
-```sh
-git clone https://github.com/armanjr/polyclaude.git
-cd polyclaude
-go build -o polyclaude .
-```
+Or with Go: `go install github.com/armanjr/polyclaude@latest`
 
 ## Usage
 
 ```sh
-# Interactive setup wizard
-polyclaude
-
-# Preview the full wizard without writing any files or cron jobs
-polyclaude --dry-run
+polyclaude            # Interactive setup wizard
+polyclaude --dry-run  # Preview without making changes
 ```
 
 The wizard walks you through:
@@ -96,19 +87,27 @@ The wizard walks you through:
 
 ### Re-running
 
-If an existing configuration is found at `~/.polyclaude/config.yaml`, you'll be prompted to start fresh or exit. Re-running is safe and idempotent — cron entries are managed between `# BEGIN polyclaude` / `# END polyclaude` markers.
+Re-running is safe and idempotent — cron entries are managed between `# BEGIN polyclaude` / `# END polyclaude` markers. If an existing config is found, you'll be prompted to start fresh or exit.
 
-### Inspecting
+### Requirements
+
+- **Claude CLI** (`npm install -g @anthropic-ai/claude-code`)
+- **cron** — standard on Linux; available on macOS (ensure cron has Full Disk Access in System Settings > Privacy & Security)
+- **Machine must be awake** when cron jobs fire. If your machine sleeps before a pre-activation or post-cycle time, that prompt won't be sent and the corresponding cycle recovery may be delayed.
+
+---
+
+## Development
+
+### Build from source
 
 ```sh
-# View installed cron jobs
-crontab -l
-
-# Check config
-cat ~/.polyclaude/config.yaml
+git clone https://github.com/ArmanJR/PolyClaude.git
+cd PolyClaude
+go build -o polyclaude .
 ```
 
-## Configuration
+### Configuration
 
 All configuration is stored in `~/.polyclaude/config.yaml`:
 
@@ -132,14 +131,7 @@ accounts:
 
 Each account gets an isolated directory used as `CLAUDE_CONFIG_DIR`, so multiple Claude logins coexist without conflict.
 
-## Requirements
-
-- **Go 1.26+** for building
-- **Claude CLI** (`npm install -g @anthropic-ai/claude-code`)
-- **cron** — standard on Linux; available on macOS (ensure cron has Full Disk Access in System Settings > Privacy & Security)
-- **Machine must be awake** when cron jobs fire. If your machine sleeps before a pre-activation or post-cycle time, that prompt won't be sent and the corresponding cycle recovery may be delayed.
-
-## Project Structure
+### Project Structure
 
 ```
 polyclaude/
@@ -154,7 +146,7 @@ polyclaude/
 └── go.mod
 ```
 
-## The Math
+### The Math
 
 The scheduling problem is a constrained interval-packing problem with periodic renewal. The full derivation — including proofs of optimality for both strategies — is in [`math.md`](math.md). Key equations:
 
