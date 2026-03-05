@@ -150,8 +150,7 @@ func (m loginModel) view() string {
 
 	s += "  Open a " + boldStyle.Render("NEW terminal") + " and run this command:\n\n"
 	s += codeStyle.Render(fmt.Sprintf("export CLAUDE_CONFIG_DIR=%s && claude", dir)) + "\n\n"
-	s += "  Then inside that Claude session, type:  " + boldStyle.Render("/login") + "\n"
-	s += "  This will open your browser. Log in with your Claude Pro account " +
+	s += "  Log in with your Claude Pro account " +
 		highlightStyle.Render(fmt.Sprintf("#%d", acctNum)) + ".\n"
 	s += "  After login succeeds, you can close that terminal.\n\n"
 	s += warnStyle.Render("  IMPORTANT:") + " Use a DIFFERENT Claude Pro account for each step.\n\n"
