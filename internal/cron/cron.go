@@ -17,7 +17,11 @@ const (
 
 // ReadCrontab reads the current user's crontab.
 func ReadCrontab() (string, error) {
-	out, err := exec.Command(crontabPath(), "-l").Output()
+	path, _ := CrontabPath()
+	if path == "" {
+		path = "crontab"
+	}
+	out, err := exec.Command(path, "-l").Output()
 	if err != nil {
 		slog.Info("no existing crontab found, starting fresh")
 		return "", nil
@@ -65,22 +69,27 @@ func UpdateCrontab(existing string, newEntries []string) string {
 	return strings.Join(result, "\n") + "\n"
 }
 
-// crontabPath resolves the crontab binary, falling back to common locations.
-func crontabPath() string {
+// CrontabPath resolves the crontab binary, falling back to common locations.
+// Returns the path and true if found, or empty string and false if not.
+func CrontabPath() (string, bool) {
 	if path, err := exec.LookPath("crontab"); err == nil {
-		return path
+		return path, true
 	}
 	for _, p := range []string{"/usr/bin/crontab", "/bin/crontab"} {
 		if _, err := exec.LookPath(p); err == nil {
-			return p
+			return p, true
 		}
 	}
-	return "crontab"
+	return "", false
 }
 
 // WriteCrontab writes content to the user's crontab.
 func WriteCrontab(content string) error {
-	cmd := exec.Command(crontabPath(), "-")
+	path, _ := CrontabPath()
+	if path == "" {
+		path = "crontab"
+	}
+	cmd := exec.Command(path, "-")
 	cmd.Stdin = bytes.NewBufferString(content)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("writing crontab: %w", err)
