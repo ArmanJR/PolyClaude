@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
-	"math"
 	"os/exec"
 	"strings"
 
@@ -77,40 +76,58 @@ func WriteCrontab(content string) error {
 	return nil
 }
 
-// GenerateEntries produces cron lines from a timetable.
-// Each entry activates an account at its pre-activation time on the specified weekdays.
+// Entry is a single cron entry with an optional descriptive comment.
+type Entry struct {
+	Comment string // e.g. "# pre-activation: slim-viper"
+	Line    string // the executable cron line
+}
+
+// Lines returns entries as flat strings (comment + line interleaved) for crontab splicing.
+func Lines(entries []Entry) []string {
+	out := make([]string, 0, len(entries)*2)
+	for _, e := range entries {
+		if e.Comment != "" {
+			out = append(out, e.Comment)
+		}
+		out = append(out, e.Line)
+	}
+	return out
+}
+
+// GenerateEntries produces cron entries from a timetable.
+// Each account gets a pre-activation entry and post-cycle entries (1 min after each block ends).
 // claudePath must be the absolute path to the claude binary (cron has a minimal PATH).
-func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, claudePath string) []string {
+func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string) []Entry {
 	dow := strings.Join(weekdays, ",")
-	var entries []string
+	var entries []Entry
 
 	for _, acct := range tt.Accounts {
 		if acct.AccountIndex >= len(accountDirs) {
 			continue
 		}
 		dir := accountDirs[acct.AccountIndex]
+		label := accountNames[acct.AccountIndex]
 
-		// Convert pre-activation time (hours from midnight) to HH:MM
-		totalMinutes := int(math.Round(acct.PreActivationTime * 60))
-		hour := totalMinutes / 60
-		minute := totalMinutes % 60
+		// Pre-activation
+		ct := scheduler.HoursToClockTime(acct.PreActivationTime)
+		entries = append(entries, Entry{
+			Comment: fmt.Sprintf("# pre-activation: %s", label),
+			Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
+				ct.Minute, ct.Hour, dow, dir, claudePath),
+		})
 
-		// Handle negative pre-activation times (before midnight)
-		if hour < 0 {
-			hour += 24
+		// Post-cycle: 1 min after each block ends
+		for _, block := range acct.Blocks {
+			pt := scheduler.HoursToClockTime(block.End + 1.0/60.0)
+			entries = append(entries, Entry{
+				Comment: fmt.Sprintf("# post-cycle: %s, cycle %d", label, block.CycleIndex+1),
+				Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
+					pt.Minute, pt.Hour, dow, dir, claudePath),
+			})
 		}
-		if minute < 0 {
-			minute += 60
-			hour--
-			if hour < 0 {
-				hour += 24
-			}
-		}
 
-		entry := fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
-			minute, hour, dow, dir, claudePath)
-		entries = append(entries, entry)
+		slog.Info("generated cron entries", "account", label,
+			"pre_activation", 1, "post_cycle", len(acct.Blocks))
 	}
-
 	return entries
 }

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"math"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/config"
@@ -118,24 +117,25 @@ func (m scheduleModel) view() string {
 			block.CycleIndex+1)
 	}
 
+	// Post-cycle activation times
+	s += boldStyle.Render("  Post-Cycle Activation Times") + "\n"
+	for _, acct := range tt.Accounts {
+		name := fmt.Sprintf("Account %d", acct.AccountIndex+1)
+		if acct.AccountIndex < len(m.config.Accounts) {
+			name = m.config.Accounts[acct.AccountIndex].Name
+		}
+		for _, block := range acct.Blocks {
+			postTime := formatTime(block.End + 1.0/60.0)
+			s += fmt.Sprintf("  %-20s cycle %-4d %s\n", name, block.CycleIndex+1, highlightStyle.Render(postTime))
+		}
+	}
+
 	s += "\n" + mutedStyle.Render("  Press Enter to continue") + "\n"
 	return s
 }
 
 // formatTime converts hours-from-midnight to HH:MM string.
 func formatTime(hours float64) string {
-	totalMinutes := int(math.Round(hours * 60))
-	h := totalMinutes / 60
-	m := totalMinutes % 60
-	if h < 0 {
-		h += 24
-	}
-	if m < 0 {
-		m += 60
-		h--
-		if h < 0 {
-			h += 24
-		}
-	}
-	return fmt.Sprintf("%02d:%02d", h%24, m)
+	ct := scheduler.HoursToClockTime(hours)
+	return fmt.Sprintf("%02d:%02d", ct.Hour, ct.Minute)
 }

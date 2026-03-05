@@ -13,21 +13,22 @@ type cronModel struct {
 	config    *config.Config
 	timetable *scheduler.Timetable
 	dryRun    bool
-	entries   []string
+	entries   []cron.Entry
 	confirmed bool
 	applied   bool
 	err       string
 }
 
 func newCronModel(cfg *config.Config, tt *scheduler.Timetable, dryRun bool) cronModel {
-	var dirs []string
+	var dirs, names []string
 	for _, a := range cfg.Accounts {
 		dirs = append(dirs, a.Dir)
+		names = append(names, a.Name)
 	}
 
-	var entries []string
+	var entries []cron.Entry
 	if tt != nil {
-		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, cfg.ClaudePath)
+		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, names, cfg.ClaudePath)
 	}
 
 	return cronModel{
@@ -84,7 +85,7 @@ func (m cronModel) applyCron() tea.Cmd {
 		if err != nil {
 			return cronAppliedMsg{err: err}
 		}
-		updated := cron.UpdateCrontab(existing, entries)
+		updated := cron.UpdateCrontab(existing, cron.Lines(entries))
 		err = cron.WriteCrontab(updated)
 		return cronAppliedMsg{err: err}
 	}
@@ -102,7 +103,10 @@ func (m cronModel) view() string {
 
 	s += boldStyle.Render("  Generated cron entries:") + "\n\n"
 	for _, entry := range m.entries {
-		s += "  " + mutedStyle.Render(entry) + "\n"
+		if entry.Comment != "" {
+			s += "  " + subtitleStyle.Render(entry.Comment) + "\n"
+		}
+		s += "  " + mutedStyle.Render(entry.Line) + "\n"
 	}
 	s += "\n"
 
