@@ -91,7 +91,7 @@ Re-running is safe and idempotent — cron entries are managed between `# BEGIN 
 
 ### Requirements
 
-- **Claude CLI** (`npm install -g @anthropic-ai/claude-code`)
+- **Claude CLI** (`curl -fsSL https://claude.ai/install.sh | bash`)
 - **cron** — standard on Linux; available on macOS (ensure cron has Full Disk Access in System Settings > Privacy & Security)
 - **Machine must be awake** when cron jobs fire. If your machine sleeps before a pre-activation or post-cycle time, that prompt won't be sent and the corresponding cycle recovery may be delayed.
 

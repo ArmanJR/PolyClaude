@@ -63,7 +63,7 @@ func (m verifyModel) view() string {
 	} else {
 		s += errorStyle.Render("  ✗") + " Claude CLI not found in PATH\n\n"
 		s += "  Install Claude CLI first:\n"
-		s += codeStyle.Render("npm install -g @anthropic-ai/claude-code") + "\n\n"
+		s += codeStyle.Render("curl -fsSL https://claude.ai/install.sh | bash") + "\n\n"
 		s += mutedStyle.Render("  Press Enter to quit")
 	}
 	s += "\n"
