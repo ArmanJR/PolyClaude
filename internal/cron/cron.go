@@ -17,7 +17,7 @@ const (
 
 // ReadCrontab reads the current user's crontab.
 func ReadCrontab() (string, error) {
-	out, err := exec.Command("crontab", "-l").Output()
+	out, err := exec.Command(crontabPath(), "-l").Output()
 	if err != nil {
 		slog.Info("no existing crontab found, starting fresh")
 		return "", nil
@@ -65,9 +65,22 @@ func UpdateCrontab(existing string, newEntries []string) string {
 	return strings.Join(result, "\n") + "\n"
 }
 
+// crontabPath resolves the crontab binary, falling back to common locations.
+func crontabPath() string {
+	if path, err := exec.LookPath("crontab"); err == nil {
+		return path
+	}
+	for _, p := range []string{"/usr/bin/crontab", "/bin/crontab"} {
+		if _, err := exec.LookPath(p); err == nil {
+			return p
+		}
+	}
+	return "crontab"
+}
+
 // WriteCrontab writes content to the user's crontab.
 func WriteCrontab(content string) error {
-	cmd := exec.Command("crontab", "-")
+	cmd := exec.Command(crontabPath(), "-")
 	cmd.Stdin = bytes.NewBufferString(content)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("writing crontab: %w", err)
