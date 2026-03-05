@@ -101,7 +101,7 @@ func (m loginModel) update(msg tea.Msg) (loginModel, tea.Cmd) {
 				return m, nil
 			}
 
-			m.err = fmt.Sprintf("Login not detected - settings.json not found at %s/settings.json. Please try again.", dir)
+			m.err = fmt.Sprintf("Login not detected - .claude.json not found at %s/.claude.json. Please try again.", dir)
 		}
 	}
 	return m, nil

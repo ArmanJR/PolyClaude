@@ -68,10 +68,10 @@ func CreateAccountDir(homeDir, name string) (string, error) {
 	return dir, nil
 }
 
-// VerifyLogin checks if settings.json exists in the account directory,
+// VerifyLogin checks if .claude.json exists in the account directory,
 // indicating a successful claude /login.
 func VerifyLogin(accountDir string) bool {
-	_, err := os.Stat(filepath.Join(accountDir, "settings.json"))
+	_, err := os.Stat(filepath.Join(accountDir, ".claude.json"))
 	return err == nil
 }
 

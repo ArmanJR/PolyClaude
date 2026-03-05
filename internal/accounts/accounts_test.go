@@ -63,18 +63,18 @@ func TestCreateAccountDir(t *testing.T) {
 func TestVerifyLogin(t *testing.T) {
 	dir := t.TempDir()
 
-	// No settings.json
+	// No .claude.json
 	if VerifyLogin(dir) {
-		t.Error("should return false without settings.json")
+		t.Error("should return false without .claude.json")
 	}
 
-	// Create settings.json
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte("{}"), 0o644); err != nil {
+	// Create .claude.json
+	if err := os.WriteFile(filepath.Join(dir, ".claude.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	if !VerifyLogin(dir) {
-		t.Error("should return true with settings.json")
+		t.Error("should return true with .claude.json")
 	}
 }
 
