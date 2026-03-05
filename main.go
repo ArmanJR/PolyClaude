@@ -11,9 +11,17 @@ import (
 	"github.com/armanjr/polyclaude/internal/tui"
 )
 
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	dryRun := flag.Bool("dry-run", false, "Walk through the wizard without making any changes")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("polyclaude " + version)
+		os.Exit(0)
+	}
 
 	// Set up debug logging to file (bubbletea owns the terminal)
 	f, err := tea.LogToFile("polyclaude-debug.log", "polyclaude")

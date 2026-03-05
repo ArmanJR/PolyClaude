@@ -29,6 +29,9 @@ go.work
 # Project binary
 polyclaude
 
+# GoReleaser
+dist/
+
 # Debug log
 polyclaude-debug.log
 
