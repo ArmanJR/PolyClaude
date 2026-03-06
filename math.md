@@ -31,14 +31,14 @@ Johnny is not a machine. He doesn't code 24hrs. Let's say, he codes during a fix
 
 Given n, x, s, and e, what is the optimal strategy for scheduling account usage to minimize downtime during the coding window?
 
-**Example:** Johnny has 3 Pro accounts, with his coding-style, his token budget lasts about 1 hour before hitting the limit. He codes from 10:00 to 20:00 (W = 10h). Without any optimization, he gets 6 hours of coding and 4 hours of waiting. With optimal scheduling, he gets 9 hours of coding and only 1 hour of waiting — same accounts, same limits, just smarter timing.
+**Example:** Johnny has 3 Pro accounts, with his coding-style, his token budget lasts about 1 hour before hitting the limit. He codes from 09:00 to 17:00 (W = 8h). Without any optimization, he gets 6 hours of coding and 2 hours of waiting. With optimal scheduling, he gets the full 8 hours of coding with zero waiting — same accounts, same limits, just smarter timing.
 
 "Optimal" has two distinct interpretations, and the best strategy differs significantly between them:
 
 - **Spread strategy:** Minimize the longest cooldown gap (uniform interruptions).
-  *e.g. 9 one-hour coding blocks separated by 6-minute breaks throughout the day. so you can take a quick break.*
+  *e.g. with a 10-hour window: 9 one-hour coding blocks separated by 6-minute breaks.*
 - **Bunch strategy:** Maximize the longest unbroken coding stretch (fewest interruptions).
-  *e.g. 9 hours of continuous, focused coding followed by a single 1-hour break.*
+  *e.g. with a 10-hour window: 9 continuous hours of coding followed by a single 1-hour break.*
 
 ---
 
@@ -100,7 +100,7 @@ $$
 \boxed{k_{\max} = \left\lfloor \frac{W + 2(T - x)}{T} \right\rfloor}
 $$
 
-**Derivation:** Consider an account with first cycle start **c₀ = a + j₀T** and last cycle start **cₖ = c₀ + (k−1)T**. For the first cycle to be usable: **c₀ ≥ s − (T − x)** (the block can end by the cycle's end and start at or after s). For the last cycle to be usable: **c₀ + (k−1)T + x ≤ e + (T − x)** isn't quite right — more precisely, **cₖ ≤ e − x** (so the block fits before e). Combining:
+**Derivation:** Consider an account with first cycle start **c₀ = a + j₀T** and last cycle start **cₖ = c₀ + (k−1)T**. For the first cycle to be usable: **c₀ ≥ s − (T − x)** (the block can end by the cycle's end and start at or after s). For the last cycle to be usable: **cₖ ≤ e − x** (so the block fits before e). Combining:
 
 ```
 c₀ ≥ s − (T − x)
@@ -137,11 +137,11 @@ This means there is enough total account capacity (from full cycles) to fill the
 
 ### 4.4 Numerical Examples
 
-**Example 1:** n = 3, x = 1, W = 10 (coding 10:00–20:00)
+**Example 1:** n = 3, x = 1, W = 8 (coding 09:00–17:00)
 
 ```
-k_max = ⌊(10 + 2·4) / 5⌋ = ⌊18/5⌋ = 3
-B = 9,  L = 9h,  D = 1h
+k_max = ⌊(8 + 2·4) / 5⌋ = ⌊16/5⌋ = 3
+B = 9,  L = min(8, 9) = 8h,  D = 0 (full coverage!)
 ```
 
 **Example 2:** n = 2, x = 1.5, W = 8
@@ -151,14 +151,14 @@ k_max = ⌊(8 + 2·3.5) / 5⌋ = ⌊15/5⌋ = 3
 B = 6,  L = min(8, 9) = 8h  →  D = 0 (full coverage!)
 ```
 
-**Example 3:** n = 3, x = 1, W = 10, no pre-activation (a = s)
+**Example 3:** n = 3, x = 1, W = 8, no pre-activation (a = s)
 
 ```
-k = ⌊(W − x) / T⌋ + 1 = ⌊9 / 5⌋ + 1 = 2  (only 2 cycles each!)
-B = 6,  L = 6h,  D = 4h  (much worse)
+k = ⌊(W − x) / T⌋ + 1 = ⌊7 / 5⌋ + 1 = 2  (only 2 cycles each!)
+B = 6,  L = 6h,  D = 2h  (much worse)
 ```
 
-This comparison highlights the power of pre-activation: from 4 hours of cooldown down to 1 hour, simply by sending a throwaway prompt in advance.
+This comparison highlights the power of pre-activation: from 2 hours of cooldown down to zero, simply by sending a throwaway prompt in advance.
 
 ### 4.5 Partial Cycle Refinement
 
@@ -178,7 +178,7 @@ $$
 L = \min(W, \; n \cdot L_{\text{single}}), \qquad D = W - L
 $$
 
-**When does this matter?** The partial cycle contributes r = min(x, (W − x) mod T) hours. When (W − x) mod T ≥ x, the boundary cycle fits a full x-hour block already counted by k_max, so the partial formula adds nothing beyond the full-cycle estimate. For the running example (x = 1, W = 10), (W − x) mod T = 4 ≥ x = 1, so the full-cycle formula is exact. But for larger x, the difference can be significant:
+**When does this matter?** The partial cycle contributes r = min(x, (W − x) mod T) hours. When (W − x) mod T ≥ x, the boundary cycle fits a full x-hour block already counted by k_max, so the partial formula adds nothing beyond the full-cycle estimate. For the running example (x = 1, W = 8), (W − x) mod T = 2 ≥ x = 1, so the full-cycle formula is exact. But for larger x, the difference can be significant:
 
 **Example:** n = 1, x = 3, W = 10
 
@@ -234,7 +234,9 @@ $$
 \boxed{g^* = \max\!\left(\frac{D}{B + 1},\; g_{\text{cycle}}\right)}
 $$
 
-**For the original problem** (n = 3, x = 1, W = 10):
+**For the primary example** (n = 3, x = 1, W = 8): D = 0 (full coverage), so g* = 0 — the spread strategy trivially covers the entire window with no gaps.
+
+For a longer window where cooldown is unavoidable (n = 3, x = 1, W = 10, D = 1h):
 
 ```
 g_lower = 1/10 h = 6 minutes
@@ -242,7 +244,7 @@ g_cycle = max(0, (5·1 + 1)/(3·2) − 1) = max(0, 0) = 0
 g* = max(6 min, 0) = 6 minutes
 ```
 
-**When does g_cycle bind?** For small n or large k_max, the cycle constraint may force a larger gap. For example, with n = 1, x = 1, W = 10: g_lower = 7/4 = 1.75h but g_cycle = 2h, giving g* = 2h. For n ≥ 2 in typical configurations, g_cycle ≤ g_lower and the information-theoretic bound is tight.
+**When does g_cycle bind?** For small n or large k_max, the cycle constraint may force a larger gap. For example, with n = 1, x = 1, W = 8: g_lower = 5/4 = 1.25h but g_cycle = 2h, giving g* = 2h. For n ≥ 2 in typical configurations, g_cycle ≤ g_lower and the information-theoretic bound is tight.
 
 ### 5.4 Optimality Proof
 
@@ -319,17 +321,15 @@ After this continuous block, there is a forced cooldown while at least one accou
 
 ### 6.4 Numerical Example
 
-For n = 3, x = 1, W = 10:
+For n = 3, x = 1, W = 8:
 
 ```
 n·x = 3 < 5 = T
 k_c = ⌊(5 − 1) / (5 − 3)⌋ + 1 = ⌊2⌋ + 1 = 3
-C_max = min(10, 3·3·1) = min(10, 9) = 9 hours!
+C_max = min(8, 3·3·1) = min(8, 9) = 8 hours — full window coverage!
 ```
 
-Johnny can code for 9 continuous hours, with a 1-hour cooldown at the end.
-
-Compare with the spread strategy on the same inputs: 9 blocks with 6-minute gaps. Same total coding time, radically different distribution.
+Johnny fills his entire 8-hour window with continuous coding. With a longer window (W = 10), C_max = min(10, 9) = 9 hours — 9 continuous hours followed by a 1-hour cooldown. Compare that with the spread strategy on the same inputs: 9 blocks with 6-minute gaps. Same total coding time, radically different distribution.
 
 ---
 
@@ -372,26 +372,27 @@ The two strategies represent endpoints of a continuous trade-off:
 
 Both strategies achieve the same total coding time L and total cooldown D. The only difference is the distribution of cooldown across the window.
 
-### 8.1 Intermediate Strategies
-
-Hybrid schedules are possible. For example, "2 bunched stretches with a single gap" can be modeled by partitioning the B blocks into 2 groups and solving each sub-problem. The maximum stretch would be approximately C_max/2 with a gap of approximately D, offering a middle ground.
-
-More generally, if Johnny wants exactly **m** breaks, the gap size becomes D/m and the maximum stretch becomes approximately B·x/(m+1), subject to cycle feasibility constraints.
-
 ---
 
 ## 9. Comparison Table — Original Problem
 
-For the concrete case **n = 3, x = 1h, T = 5h, coding window [10:00, 20:00]**:
+For the concrete case **n = 3, x = 1h, T = 5h, coding window [09:00, 17:00] (W = 8)**:
+
+| Strategy | Pre-act? | Cycles/account | Total Coding | Total Cooldown | Max Gap | Max Stretch |
+|----------|----------|----------------|--------------|----------------|---------|-------------|
+| Naïve sequential | No | 2 | 6h | 2h | 2h | 3h |
+| Spread (optimal) | Yes | 3 | 8h | 0 | 0 | 8h |
+| Bunch (optimal) | Yes | 3 | 8h | 0 | 0 | 8h |
+
+With W = 8, pre-activation unlocks a 3rd cycle per account, achieving full coverage — the strategy choice is irrelevant. For a longer window where cooldown is unavoidable (**W = 10**):
 
 | Strategy | Pre-act? | Cycles/account | Total Coding | Total Cooldown | Max Gap | Max Stretch |
 |----------|----------|----------------|--------------|----------------|---------|-------------|
 | Naïve sequential | No | 2 | 6h | 4h | 2h | 3h |
-| Staggered (∞-horizon) | No | 2 | 6h | 4h | 40min | 1h |
 | Spread (optimal) | Yes | 3 | 9h | 1h | 6min | 1h |
 | Bunch (optimal) | Yes | 3 | 9h | 1h | 1h | 9h |
 
-The jump from 2 to 3 cycles per account (enabled by pre-activation) is the decisive improvement. The choice between spread and bunch is then a matter of preference.
+The jump from 2 to 3 cycles per account (enabled by pre-activation) is the decisive improvement. When cooldown remains, the choice between spread and bunch is a matter of preference.
 
 ---
 

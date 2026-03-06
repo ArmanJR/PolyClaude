@@ -62,7 +62,7 @@ Post-cycle:      A at 10:01, B at 11:01, C at 12:01, A at 13:01, ...
 
 ## Strategies
 
-Both strategies achieve the same total coding time. They differ in how cooldown is distributed:
+With enough accounts, your window is fully covered (as in the example above). With fewer accounts or longer windows, some cooldown is unavoidable — both strategies achieve the same total coding time but differ in how cooldown is distributed:
 
 **Spread** — Minimizes the longest interruption. Coding blocks are evenly spaced with short gaps between them. Best for incremental tasks, debugging, and code reviews where short pauses are tolerable.
 
