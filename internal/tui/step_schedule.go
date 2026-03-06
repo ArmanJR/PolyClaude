@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/config"
@@ -81,10 +82,11 @@ func (m scheduleModel) view() string {
 
 	s += boldStyle.Render("  Summary") + "\n"
 	s += fmt.Sprintf("  Strategy:          %s\n", highlightStyle.Render(tt.Strategy))
-	s += fmt.Sprintf("  Cycles/account:    %d\n", met.KMax)
+	s += fmt.Sprintf("  Cycles/account:    %s\n", formatCyclesPerAccount(tt.Accounts))
 	s += fmt.Sprintf("  Total blocks:      %d\n", met.B)
 	s += fmt.Sprintf("  Total coding:      %s\n", successStyle.Render(fmt.Sprintf("%.1fh", met.L)))
 	s += fmt.Sprintf("  Total cooldown:    %s\n", warnStyle.Render(fmt.Sprintf("%.1fh", met.D)))
+	s += fmt.Sprintf("  Workdays:          %s\n", strings.Join(m.config.Weekdays, ","))
 	s += "\n"
 
 	// Pre-activation times
@@ -132,6 +134,28 @@ func (m scheduleModel) view() string {
 
 	s += "\n" + mutedStyle.Render("  Press Enter to continue") + "\n"
 	return s
+}
+
+// formatCyclesPerAccount returns a display string for cycles per account.
+// Shows a single number if all accounts have the same count, otherwise "min–max".
+func formatCyclesPerAccount(accounts []scheduler.AccountSchedule) string {
+	if len(accounts) == 0 {
+		return "0"
+	}
+	min, max := len(accounts[0].Blocks), len(accounts[0].Blocks)
+	for _, acct := range accounts[1:] {
+		n := len(acct.Blocks)
+		if n < min {
+			min = n
+		}
+		if n > max {
+			max = n
+		}
+	}
+	if min == max {
+		return fmt.Sprintf("%d", min)
+	}
+	return fmt.Sprintf("%d–%d", min, max)
 }
 
 // formatTime converts hours-from-midnight to HH:MM string.
