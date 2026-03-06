@@ -2,6 +2,8 @@
 
 Schedule multiple Claude Code Pro accounts to minimize rate-limit downtime.
 
+<p align="center"><img src="screenshot.png" alt="screenshot" /></p>
+
 ## TL;DR
 
 Using combinatorial optimization, PolyClaude:
@@ -40,6 +42,8 @@ Given your number of accounts, coding window, and average time before hitting th
 5. Installs post-block cron jobs at `c₀ + j·(T + 1min)` to start each subsequent rate-limit timer, with compounding 1-minute delays so accounts reset on time for the next cycle
 
 When you sit down to code, your accounts' cycles are already aligned with your coding window.
+
+<p align="center"><img src="impact.png" alt="impact" /></p>
 
 ### Example
 
