@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/cron"
@@ -115,15 +117,74 @@ func crontabInstallHint() string {
 		return "  crontab is included with macOS. If missing, reinstall Command Line Tools:\n" +
 			"  " + codeStyle.Render("xcode-select --install") + "\n"
 	case "linux":
-		return "  " + codeStyle.Render("# Debian/Ubuntu") + "\n" +
-			"  " + codeStyle.Render("sudo apt install cron && sudo service cron start") + "\n\n" +
-			"  " + codeStyle.Render("# RHEL/Fedora/CentOS") + "\n" +
-			"  " + codeStyle.Render("sudo dnf install cronie && sudo service crond start") + "\n\n" +
-			"  " + codeStyle.Render("# Alpine") + "\n" +
-			"  " + codeStyle.Render("apk add dcron && rc-update add dcron default && rc-service dcron start") + "\n\n" +
-			"  " + codeStyle.Render("# Arch") + "\n" +
-			"  " + codeStyle.Render("sudo pacman -S cronie && sudo service cronie start") + "\n"
+		return linuxCrontabHint()
 	default:
 		return "  Install a cron implementation for your OS to provide the crontab command.\n"
 	}
+}
+
+// linuxDistroID returns the ID field from /etc/os-release (e.g. "ubuntu", "fedora", "alpine", "arch").
+func linuxDistroID() string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if key, val, ok := strings.Cut(line, "="); ok && key == "ID" {
+			return strings.Trim(val, "\"")
+		}
+	}
+	return ""
+}
+
+func linuxCrontabHint() string {
+	distro := linuxDistroID()
+	switch distro {
+	case "debian", "ubuntu", "pop", "linuxmint", "elementary", "zorin", "kali":
+		return "  " + codeStyle.Render("sudo apt install cron && sudo service cron start") + "\n"
+	case "fedora", "rhel", "centos", "rocky", "alma", "ol":
+		return "  " + codeStyle.Render("sudo dnf install cronie && sudo service crond start") + "\n"
+	case "alpine":
+		return "  " + codeStyle.Render("apk add dcron && rc-update add dcron default && rc-service dcron start") + "\n"
+	case "arch", "manjaro", "endeavouros":
+		return "  " + codeStyle.Render("sudo pacman -S cronie && sudo service cronie start") + "\n"
+	default:
+		// Also check ID_LIKE for derivatives we didn't list explicitly
+		return linuxCrontabHintByIDLike()
+	}
+}
+
+func linuxCrontabHintByIDLike() string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return linuxCrontabFallback()
+	}
+	var idLike string
+	for _, line := range strings.Split(string(data), "\n") {
+		if key, val, ok := strings.Cut(line, "="); ok && key == "ID_LIKE" {
+			idLike = strings.Trim(val, "\"")
+			break
+		}
+	}
+	switch {
+	case strings.Contains(idLike, "debian"), strings.Contains(idLike, "ubuntu"):
+		return "  " + codeStyle.Render("sudo apt install cron && sudo service cron start") + "\n"
+	case strings.Contains(idLike, "fedora"), strings.Contains(idLike, "rhel"):
+		return "  " + codeStyle.Render("sudo dnf install cronie && sudo service crond start") + "\n"
+	case strings.Contains(idLike, "arch"):
+		return "  " + codeStyle.Render("sudo pacman -S cronie && sudo service cronie start") + "\n"
+	default:
+		return linuxCrontabFallback()
+	}
+}
+
+func linuxCrontabFallback() string {
+	return "  " + codeStyle.Render("# Debian/Ubuntu") + "\n" +
+		"  " + codeStyle.Render("sudo apt install cron && sudo service cron start") + "\n\n" +
+		"  " + codeStyle.Render("# RHEL/Fedora/CentOS") + "\n" +
+		"  " + codeStyle.Render("sudo dnf install cronie && sudo service crond start") + "\n\n" +
+		"  " + codeStyle.Render("# Alpine") + "\n" +
+		"  " + codeStyle.Render("apk add dcron && rc-update add dcron default && rc-service dcron start") + "\n\n" +
+		"  " + codeStyle.Render("# Arch") + "\n" +
+		"  " + codeStyle.Render("sudo pacman -S cronie && sudo service cronie start") + "\n"
 }
