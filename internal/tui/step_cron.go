@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/config"
@@ -28,7 +30,7 @@ func newCronModel(cfg *config.Config, tt *scheduler.Timetable, dryRun bool) cron
 
 	var entries []cron.Entry
 	if tt != nil {
-		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, names, cfg.ClaudePath, cfg.Timezone)
+		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, names, cfg.ClaudePath, cfg.Timezone, cfg.HomeDir)
 	}
 
 	return cronModel{
@@ -80,7 +82,22 @@ type cronAppliedMsg struct {
 
 func (m cronModel) applyCron() tea.Cmd {
 	entries := m.entries
+	logDir := cron.LogDir(m.config.HomeDir)
+	var accountNames []string
+	for _, a := range m.config.Accounts {
+		accountNames = append(accountNames, a.Name)
+	}
 	return func() tea.Msg {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			return cronAppliedMsg{err: fmt.Errorf("creating log dir: %w", err)}
+		}
+		for _, name := range accountNames {
+			f, err := os.OpenFile(filepath.Join(logDir, name+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+			if err != nil {
+				return cronAppliedMsg{err: fmt.Errorf("creating log file for %s: %w", name, err)}
+			}
+			f.Close()
+		}
 		existing, err := cron.ReadCrontab()
 		if err != nil {
 			return cronAppliedMsg{err: err}

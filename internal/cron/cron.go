@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -99,6 +100,11 @@ func WriteCrontab(content string) error {
 	return nil
 }
 
+// LogDir returns the directory where cron job logs are stored.
+func LogDir(homeDir string) string {
+	return filepath.Join(homeDir, "logs")
+}
+
 // Entry is a single cron entry with an optional descriptive comment.
 type Entry struct {
 	Comment string // e.g. "# pre-activation: slim-viper"
@@ -176,7 +182,9 @@ func ShiftWeekdays(weekdays []string, offset int) []string {
 // Each account gets a pre-activation entry and post-cycle entries (1 min after each block ends).
 // claudePath must be the absolute path to the claude binary (cron has a minimal PATH).
 // userTZ is the IANA timezone of the user's schedule times. If empty, no conversion is done.
-func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string, userTZ string) []Entry {
+func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string, userTZ string, homeDir string) []Entry {
+	logDir := LogDir(homeDir)
+
 	var userLoc, systemLoc *time.Location
 	convertTZ := false
 	if userTZ != "" {
@@ -208,7 +216,7 @@ func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []s
 		entries = append(entries, buildEntry(
 			acct.PreActivationTime, weekdays, dir, label, claudePath,
 			fmt.Sprintf("# pre-activation: %s", label),
-			convertTZ, userLoc, systemLoc,
+			convertTZ, userLoc, systemLoc, logDir,
 		))
 
 		// Post-cycle: 1 min after each block ends
@@ -216,7 +224,7 @@ func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []s
 			entries = append(entries, buildEntry(
 				block.End+1.0/60.0, weekdays, dir, label, claudePath,
 				fmt.Sprintf("# post-cycle: %s, cycle %d", label, block.CycleIndex+1),
-				convertTZ, userLoc, systemLoc,
+				convertTZ, userLoc, systemLoc, logDir,
 			))
 		}
 
@@ -226,7 +234,7 @@ func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []s
 	return entries
 }
 
-func buildEntry(hours float64, weekdays []string, dir, _, claudePath, comment string, convertTZ bool, userLoc, systemLoc *time.Location) Entry {
+func buildEntry(hours float64, weekdays []string, dir, label, claudePath, comment string, convertTZ bool, userLoc, systemLoc *time.Location, logDir string) Entry {
 	var minute, hour int
 	dow := strings.Join(weekdays, ",")
 
@@ -244,9 +252,19 @@ func buildEntry(hours float64, weekdays []string, dir, _, claudePath, comment st
 		hour = ct.Hour
 	}
 
+	desc := strings.TrimPrefix(comment, "# ")
+	logFile := filepath.Join(logDir, label+".log")
+
+	// Wrap the command in a shell that logs output with timestamps.
+	// Uses plain `date` (no format specifiers) to avoid crontab % escaping issues.
+	// Log directory and files are pre-created during cron installation.
+	line := fmt.Sprintf(
+		`%d %d * * %s /bin/sh -c 'exec >>%s 2>&1; echo "=== $(date) START %s ==="; CLAUDE_CONFIG_DIR=%s %s -p "say hi"; rc=$?; echo "=== $(date) END rc=$rc ==="'`,
+		minute, hour, dow, logFile, desc, dir, claudePath,
+	)
+
 	return Entry{
 		Comment: comment,
-		Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
-			minute, hour, dow, dir, claudePath),
+		Line:    line,
 	}
 }

@@ -99,7 +99,7 @@ func TestGenerateEntries(t *testing.T) {
 	names := []string{"slim-viper", "bold-falcon"}
 	claudePath := "/usr/local/bin/claude"
 
-	entries := GenerateEntries(tt, weekdays, dirs, names, claudePath, "")
+	entries := GenerateEntries(tt, weekdays, dirs, names, claudePath, "", "/home/user/.polyclaude")
 
 	// Account 0: 1 pre-act + 2 post-cycle = 3
 	// Account 1: 1 pre-act + 1 post-cycle = 2
@@ -122,6 +122,16 @@ func TestGenerateEntries(t *testing.T) {
 	}
 	if entries[0].Comment != "# pre-activation: slim-viper" {
 		t.Errorf("Entry 0 comment = %q, want %q", entries[0].Comment, "# pre-activation: slim-viper")
+	}
+	// Verify logging wrapper
+	if !strings.Contains(entries[0].Line, "/bin/sh -c") {
+		t.Errorf("Entry 0 line should use shell wrapper, got: %s", entries[0].Line)
+	}
+	if !strings.Contains(entries[0].Line, "/home/user/.polyclaude/logs/slim-viper.log") {
+		t.Errorf("Entry 0 line should log to account log file, got: %s", entries[0].Line)
+	}
+	if !strings.Contains(entries[0].Line, "rc=$?") {
+		t.Errorf("Entry 0 line should capture exit code, got: %s", entries[0].Line)
 	}
 
 	// Post-cycle for account 0, cycle 1: end=8.5 + 1/60 ≈ 8:31
@@ -147,6 +157,10 @@ func TestGenerateEntries(t *testing.T) {
 	if entries[3].Comment != "# pre-activation: bold-falcon" {
 		t.Errorf("Entry 3 comment = %q, want %q", entries[3].Comment, "# pre-activation: bold-falcon")
 	}
+	// Verify account 1 logs to its own file
+	if !strings.Contains(entries[3].Line, "/home/user/.polyclaude/logs/bold-falcon.log") {
+		t.Errorf("Entry 3 line should log to bold-falcon.log, got: %s", entries[3].Line)
+	}
 
 	// Post-cycle for account 1, cycle 1: end=11.0 + 1/60 ≈ 11:01
 	if !strings.Contains(entries[4].Line, "1 11") {
@@ -160,7 +174,7 @@ func TestGenerateEntries_NoBlocks(t *testing.T) {
 			{AccountIndex: 0, PreActivationTime: 7.0},
 		},
 	}
-	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"solo"}, "/bin/claude", "")
+	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"solo"}, "/bin/claude", "", "/home/user/.polyclaude")
 	if len(entries) != 1 {
 		t.Fatalf("len(entries) = %d, want 1 (pre-activation only)", len(entries))
 	}
@@ -182,7 +196,7 @@ func TestGenerateEntries_MidnightWrap(t *testing.T) {
 			},
 		},
 	}
-	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"night-owl"}, "/bin/claude", "")
+	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"night-owl"}, "/bin/claude", "", "/home/user/.polyclaude")
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want 2", len(entries))
 	}
@@ -304,6 +318,105 @@ func TestShiftWeekdays(t *testing.T) {
 	}
 }
 
+func TestLogDir(t *testing.T) {
+	got := LogDir("/home/user/.polyclaude")
+	want := "/home/user/.polyclaude/logs"
+	if got != want {
+		t.Errorf("LogDir = %q, want %q", got, want)
+	}
+}
+
+func TestBuildEntry_LoggingWrapper(t *testing.T) {
+	entry := buildEntry(9.5, []string{"mon", "fri"}, "/cfg/dir", "swift-fox", "/bin/claude",
+		"# pre-activation: swift-fox", false, nil, nil, "/home/.polyclaude/logs")
+
+	checks := []struct {
+		desc    string
+		substr  string
+		present bool
+	}{
+		{"starts with cron schedule", "30 9 * * mon,fri", true},
+		{"uses shell wrapper", "/bin/sh -c", true},
+		{"redirects to account log file", "/home/.polyclaude/logs/swift-fox.log", true},
+		{"appends stdout+stderr", "exec >>", true},
+		{"logs START marker with date", `echo "=== $(date) START`, true},
+		{"logs END marker with date", `echo "=== $(date) END`, true},
+		{"captures exit code", "rc=$?", true},
+		{"includes exit code in END", "rc=$rc", true},
+		{"sets CLAUDE_CONFIG_DIR", "CLAUDE_CONFIG_DIR=/cfg/dir", true},
+		{"invokes claude binary", "/bin/claude -p", true},
+		{"description strips # prefix", "START pre-activation: swift-fox", true},
+		{"no mkdir in cron line", "mkdir", false},
+	}
+	for _, c := range checks {
+		got := strings.Contains(entry.Line, c.substr)
+		if got != c.present {
+			t.Errorf("%s: Contains(%q) = %v, want %v\n  line: %s", c.desc, c.substr, got, c.present, entry.Line)
+		}
+	}
+}
+
+func TestBuildEntry_NoCrontabPercentChars(t *testing.T) {
+	// '%' in crontab is interpreted as newline; generated lines must not contain any.
+	tt := &scheduler.Timetable{
+		Accounts: []scheduler.AccountSchedule{
+			{
+				AccountIndex:      0,
+				PreActivationTime: 10.0,
+				Blocks: []scheduler.Block{
+					{AccountIndex: 0, CycleIndex: 0, Start: 11.0, End: 13.0},
+				},
+			},
+		},
+	}
+	entries := GenerateEntries(tt, []string{"mon", "tue", "wed", "thu", "fri"},
+		[]string{"/dir"}, []string{"acct"}, "/bin/claude", "", "/home/.polyclaude")
+
+	for i, e := range entries {
+		if strings.Contains(e.Line, "%") {
+			t.Errorf("entry %d contains '%%' which crontab interprets as newline:\n  %s", i, e.Line)
+		}
+	}
+}
+
+func TestBuildEntry_PerAccountLogFile(t *testing.T) {
+	tt := &scheduler.Timetable{
+		Accounts: []scheduler.AccountSchedule{
+			{AccountIndex: 0, PreActivationTime: 8.0},
+			{AccountIndex: 1, PreActivationTime: 9.0},
+		},
+	}
+	dirs := []string{"/dir/a", "/dir/b"}
+	names := []string{"alpha-one", "beta-two"}
+	entries := GenerateEntries(tt, []string{"mon"}, dirs, names, "/bin/claude", "", "/home/.polyclaude")
+
+	if len(entries) != 2 {
+		t.Fatalf("len(entries) = %d, want 2", len(entries))
+	}
+	if !strings.Contains(entries[0].Line, "/home/.polyclaude/logs/alpha-one.log") {
+		t.Errorf("entry 0 should log to alpha-one.log, got: %s", entries[0].Line)
+	}
+	if !strings.Contains(entries[1].Line, "/home/.polyclaude/logs/beta-two.log") {
+		t.Errorf("entry 1 should log to beta-two.log, got: %s", entries[1].Line)
+	}
+	// Ensure they don't reference each other's log file
+	if strings.Contains(entries[0].Line, "beta-two.log") {
+		t.Errorf("entry 0 should not reference beta-two.log")
+	}
+	if strings.Contains(entries[1].Line, "alpha-one.log") {
+		t.Errorf("entry 1 should not reference alpha-one.log")
+	}
+}
+
+func TestBuildEntry_PostCycleDescription(t *testing.T) {
+	entry := buildEntry(14.0, []string{"wed"}, "/dir", "acct", "/bin/claude",
+		"# post-cycle: acct, cycle 2", false, nil, nil, "/logs")
+
+	if !strings.Contains(entry.Line, "START post-cycle: acct, cycle 2") {
+		t.Errorf("description should include post-cycle info, got: %s", entry.Line)
+	}
+}
+
 func TestGenerateEntries_WithTimezone(t *testing.T) {
 	est, _ := time.LoadLocation("America/New_York")
 	utc, _ := time.LoadLocation("UTC")
@@ -322,7 +435,7 @@ func TestGenerateEntries_WithTimezone(t *testing.T) {
 		},
 	}
 
-	entries := GenerateEntries(tt, []string{"mon", "fri"}, []string{"/dir"}, []string{"acct"}, "/bin/claude", "America/New_York")
+	entries := GenerateEntries(tt, []string{"mon", "fri"}, []string{"/dir"}, []string{"acct"}, "/bin/claude", "America/New_York", "/home/user/.polyclaude")
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want 2", len(entries))
 	}

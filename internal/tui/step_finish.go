@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/armanjr/polyclaude/internal/config"
+	"github.com/armanjr/polyclaude/internal/cron"
 )
 
 type finishModel struct {
@@ -37,10 +38,13 @@ func (m finishModel) view() string {
 	s += successStyle.Render("  ✓") + " Configuration saved to " +
 		mutedStyle.Render(config.ConfigPath(m.config.HomeDir)) + "\n"
 	s += successStyle.Render("  ✓") + fmt.Sprintf(" %d account(s) configured\n", len(m.config.Accounts))
-	s += successStyle.Render("  ✓") + " Cron jobs installed\n\n"
+	s += successStyle.Render("  ✓") + " Cron jobs installed\n"
+	s += successStyle.Render("  ✓") + " Logs: " +
+		mutedStyle.Render(cron.LogDir(m.config.HomeDir)) + "\n\n"
 
 	s += "  Useful commands:\n"
 	s += "  " + codeStyle.Render("crontab -l") + "  View installed cron jobs\n"
+	s += "  " + codeStyle.Render("tail -f "+cron.LogDir(m.config.HomeDir)+"/*.log") + "  Watch cron job logs\n"
 	s += "  " + codeStyle.Render("polyclaude --dry-run") + "  Re-run without side effects\n\n"
 
 	s += mutedStyle.Render("  github.com/armanjr/polyclaude") + "\n\n"
