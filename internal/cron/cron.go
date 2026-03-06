@@ -179,7 +179,10 @@ func ShiftWeekdays(weekdays []string, offset int) []string {
 }
 
 // GenerateEntries produces cron entries from a timetable.
-// Each account gets a pre-activation entry and post-cycle entries (1 min after each block ends).
+// Each account gets a pre-activation entry and post-block entries.
+// Post-block entries fire at c₀ + j*(T + 1min) for j=1..K, where c₀ is the
+// pre-activation time and K is the number of coding cycles. Each activation
+// starts a fresh T-hour rate-limit timer, so the 1-minute delays compound.
 // claudePath must be the absolute path to the claude binary (cron has a minimal PATH).
 // userTZ is the IANA timezone of the user's schedule times. If empty, no conversion is done.
 func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string, userTZ string, homeDir string) []Entry {
@@ -219,17 +222,19 @@ func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []s
 			convertTZ, userLoc, systemLoc, logDir,
 		))
 
-		// Post-cycle: 1 min after each block ends
-		for _, block := range acct.Blocks {
+		// Post-block: c₀ + j*(T + 1/60) for each cycle j=1..K
+		// Each activation starts a new T-hour timer, so delays compound.
+		for j := 1; j <= len(acct.Blocks); j++ {
+			postTime := acct.PreActivationTime + float64(j)*(scheduler.T+1.0/60.0)
 			entries = append(entries, buildEntry(
-				block.End+1.0/60.0, weekdays, dir, label, claudePath,
-				fmt.Sprintf("# post-cycle: %s, cycle %d", label, block.CycleIndex+1),
+				postTime, weekdays, dir, label, claudePath,
+				fmt.Sprintf("# post-block: %s, block %d", label, j),
 				convertTZ, userLoc, systemLoc, logDir,
 			))
 		}
 
 		slog.Info("generated cron entries", "account", label,
-			"pre_activation", 1, "post_cycle", len(acct.Blocks))
+			"pre_activation", 1, "post_block", len(acct.Blocks))
 	}
 	return entries
 }

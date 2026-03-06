@@ -101,8 +101,8 @@ func TestGenerateEntries(t *testing.T) {
 
 	entries := GenerateEntries(tt, weekdays, dirs, names, claudePath, "", "/home/user/.polyclaude")
 
-	// Account 0: 1 pre-act + 2 post-cycle = 3
-	// Account 1: 1 pre-act + 1 post-cycle = 2
+	// Account 0: 1 pre-act + 2 post-block = 3
+	// Account 1: 1 pre-act + 1 post-block = 2
 	if len(entries) != 5 {
 		t.Fatalf("len(entries) = %d, want 5", len(entries))
 	}
@@ -134,20 +134,20 @@ func TestGenerateEntries(t *testing.T) {
 		t.Errorf("Entry 0 line should capture exit code, got: %s", entries[0].Line)
 	}
 
-	// Post-cycle for account 0, cycle 1: end=8.5 + 1/60 ≈ 8:31
-	if !strings.Contains(entries[1].Line, "31 8") {
-		t.Errorf("Entry 1 line should have minute=31 hour=8, got: %s", entries[1].Line)
+	// Post-block 1 for account 0: c₀ + 1*(T+1/60) = 5.5 + 5.01667 = 10.51667h ≈ 10:31
+	if !strings.Contains(entries[1].Line, "31 10") {
+		t.Errorf("Entry 1 line should have minute=31 hour=10, got: %s", entries[1].Line)
 	}
-	if entries[1].Comment != "# post-cycle: slim-viper, cycle 1" {
-		t.Errorf("Entry 1 comment = %q, want %q", entries[1].Comment, "# post-cycle: slim-viper, cycle 1")
+	if entries[1].Comment != "# post-block: slim-viper, block 1" {
+		t.Errorf("Entry 1 comment = %q, want %q", entries[1].Comment, "# post-block: slim-viper, block 1")
 	}
 
-	// Post-cycle for account 0, cycle 2: end=16.0 + 1/60 ≈ 16:01
-	if !strings.Contains(entries[2].Line, "1 16") {
-		t.Errorf("Entry 2 line should have minute=1 hour=16, got: %s", entries[2].Line)
+	// Post-block 2 for account 0: c₀ + 2*(T+1/60) = 5.5 + 10.03333 = 15.53333h ≈ 15:32
+	if !strings.Contains(entries[2].Line, "32 15") {
+		t.Errorf("Entry 2 line should have minute=32 hour=15, got: %s", entries[2].Line)
 	}
-	if entries[2].Comment != "# post-cycle: slim-viper, cycle 2" {
-		t.Errorf("Entry 2 comment = %q, want %q", entries[2].Comment, "# post-cycle: slim-viper, cycle 2")
+	if entries[2].Comment != "# post-block: slim-viper, block 2" {
+		t.Errorf("Entry 2 comment = %q, want %q", entries[2].Comment, "# post-block: slim-viper, block 2")
 	}
 
 	// Pre-activation for account 1: 6.75h = 6:45
@@ -162,9 +162,9 @@ func TestGenerateEntries(t *testing.T) {
 		t.Errorf("Entry 3 line should log to bold-falcon.log, got: %s", entries[3].Line)
 	}
 
-	// Post-cycle for account 1, cycle 1: end=11.0 + 1/60 ≈ 11:01
-	if !strings.Contains(entries[4].Line, "1 11") {
-		t.Errorf("Entry 4 line should have minute=1 hour=11, got: %s", entries[4].Line)
+	// Post-block 1 for account 1: c₀ + 1*(T+1/60) = 6.75 + 5.01667 = 11.76667h ≈ 11:46
+	if !strings.Contains(entries[4].Line, "46 11") {
+		t.Errorf("Entry 4 line should have minute=46 hour=11, got: %s", entries[4].Line)
 	}
 }
 
@@ -200,8 +200,8 @@ func TestGenerateEntries_MidnightWrap(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want 2", len(entries))
 	}
-	// Post-cycle: 23:59 + 1 min = 00:00
-	if !strings.Contains(entries[1].Line, "0 0 ") {
+	// Post-block 1: c₀ + 1*(T+1/60) = 20.0 + 5.01667 = 25.01667h → wraps to 01:01
+	if !strings.Contains(entries[1].Line, "1 1 ") {
 		t.Errorf("midnight wrap failed, got: %s", entries[1].Line)
 	}
 }
@@ -408,12 +408,12 @@ func TestBuildEntry_PerAccountLogFile(t *testing.T) {
 	}
 }
 
-func TestBuildEntry_PostCycleDescription(t *testing.T) {
+func TestBuildEntry_PostBlockDescription(t *testing.T) {
 	entry := buildEntry(14.0, []string{"wed"}, "/dir", "acct", "/bin/claude",
-		"# post-cycle: acct, cycle 2", false, nil, nil, "/logs")
+		"# post-block: acct, block 2", false, nil, nil, "/logs")
 
-	if !strings.Contains(entry.Line, "START post-cycle: acct, cycle 2") {
-		t.Errorf("description should include post-cycle info, got: %s", entry.Line)
+	if !strings.Contains(entry.Line, "START post-block: acct, block 2") {
+		t.Errorf("description should include post-block info, got: %s", entry.Line)
 	}
 }
 

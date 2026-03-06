@@ -37,7 +37,7 @@ Given your number of accounts, coding window, and average time before hitting th
 2. Generates an optimal block schedule using your chosen strategy
 3. Calculates the exact pre-activation time for each account
 4. Installs cron jobs that send a throwaway prompt (`claude -p "say hi"`) at each pre-activation time to start the 5-hour cycle timer
-5. Installs post-cycle cron jobs that fire 1 minute after each block ends, starting the rate-limit recovery window immediately so accounts are ready for subsequent cycles
+5. Installs post-block cron jobs at `c₀ + j·(T + 1min)` to start each subsequent rate-limit timer, with compounding 1-minute delays so accounts reset on time for the next cycle
 
 When you sit down to code, your accounts' cycles are already aligned with your coding window.
 
@@ -47,16 +47,16 @@ When you sit down to code, your accounts' cycles are already aligned with your c
 
 **Without PolyClaude:** Each account gets ~2 cycles. 6 hours of coding, 2 hours waiting.
 
-**With PolyClaude (bunch strategy):** Pre-activation unlocks a 3rd cycle per account. Post-cycle activations keep recovery windows ticking. 8 continuous hours of coding, zero downtime:
+**With PolyClaude (bunch strategy):** Pre-activation unlocks a 3rd cycle per account. Post-block activations start each subsequent 5-hour timer (with compounding 1-minute delays). 8 continuous hours of coding, zero downtime:
 
 ```
-Pre-activation:  Account A at 05:00, Account B at 06:00, Account C at 09:00
-Post-cycle:      A at 10:01, B at 11:01, C at 12:01, A at 13:01, ...
+Pre-activation:  Account A at 05:00, B at 06:00, C at 07:00
+Post-block:      A at 10:01, B at 11:01, C at 12:01, A at 15:02, ...
 
 09  10  11  12  13  14  15  16  17
 [─A─][─B─][─C─][─A─][─B─][─C─][─A─][─B─]
-  ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑
-  pre  post post post post post post post
+  ↑              ↑              ↑
+  pre-act        coding         coding
           8 hours continuous coding
 ```
 
@@ -113,8 +113,8 @@ The wizard walks you through:
 2. **Configure** — Home directory, number of accounts, avg dev time, coding window, weekdays, strategy
 3. **Login** — Guides you through `claude /login` for each account in an isolated config directory
 4. **Sanity check** — Runs `claude -p "say hi"` per account to verify auth
-5. **Schedule** — Displays the computed schedule with pre-activation times, block timeline, and post-cycle activation times
-6. **Cron** — Installs pre-activation and post-cycle cron jobs
+5. **Schedule** — Displays the computed schedule with pre-activation times, block timeline, and post-block activation times
+6. **Cron** — Installs pre-activation and post-block cron jobs
 
 ### Re-running
 

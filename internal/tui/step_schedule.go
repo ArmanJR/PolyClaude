@@ -119,16 +119,16 @@ func (m scheduleModel) view() string {
 			block.CycleIndex+1)
 	}
 
-	// Post-cycle activation times
-	s += boldStyle.Render("  Post-Cycle Activation Times") + "\n"
+	// Post-block activation times
+	s += boldStyle.Render("  Post-Block Activation Times") + "\n"
 	for _, acct := range tt.Accounts {
 		name := fmt.Sprintf("Account %d", acct.AccountIndex+1)
 		if acct.AccountIndex < len(m.config.Accounts) {
 			name = m.config.Accounts[acct.AccountIndex].Name
 		}
-		for _, block := range acct.Blocks {
-			postTime := formatTime(block.End + 1.0/60.0)
-			s += fmt.Sprintf("  %-20s cycle %-4d %s\n", name, block.CycleIndex+1, highlightStyle.Render(postTime))
+		for j := 1; j <= len(acct.Blocks); j++ {
+			postTime := formatTime(acct.PreActivationTime + float64(j)*(scheduler.T+1.0/60.0))
+			s += fmt.Sprintf("  %-20s block %-4d %s\n", name, j, highlightStyle.Render(postTime))
 		}
 	}
 
