@@ -207,6 +207,37 @@ func TestExists(t *testing.T) {
 	}
 }
 
+func TestValidateTimezone(t *testing.T) {
+	tests := []struct {
+		tz      string
+		wantErr bool
+	}{
+		{"America/New_York", false},
+		{"UTC", false},
+		{"Europe/London", false},
+		{"Asia/Kolkata", false},
+		{"Invalid/Nowhere", true},
+		{"not-a-timezone", true},
+	}
+	for _, tt := range tests {
+		err := ValidateTimezone(tt.tz)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ValidateTimezone(%q) error = %v, wantErr %v", tt.tz, err, tt.wantErr)
+		}
+	}
+}
+
+func TestDetectSystemTimezone(t *testing.T) {
+	tz := DetectSystemTimezone()
+	if tz == "" {
+		t.Error("DetectSystemTimezone() returned empty string")
+	}
+	// The result must be a valid IANA name
+	if err := ValidateTimezone(tz); err != nil {
+		t.Errorf("DetectSystemTimezone() returned invalid timezone %q: %v", tz, err)
+	}
+}
+
 func TestDefaultHomeDir(t *testing.T) {
 	dir, err := DefaultHomeDir()
 	if err != nil {

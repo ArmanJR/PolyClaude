@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func ValidateNumAccounts(n int) error {
@@ -56,6 +57,14 @@ func ValidateWeekdays(days []string) error {
 		if !validWeekdays[strings.ToLower(d)] {
 			return fmt.Errorf("invalid weekday: %q", d)
 		}
+	}
+	return nil
+}
+
+func ValidateTimezone(tz string) error {
+	_, err := time.LoadLocation(tz)
+	if err != nil {
+		return fmt.Errorf("invalid IANA timezone %q: %w", tz, err)
 	}
 	return nil
 }

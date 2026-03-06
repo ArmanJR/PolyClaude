@@ -77,6 +77,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.config.AvgDevTime = msg.avgDevTime
 		m.config.StartTime = msg.startTime
 		m.config.EndTime = msg.endTime
+		m.config.Timezone = msg.timezone
 		m.config.Weekdays = msg.weekdays
 		m.config.Strategy = msg.strategy
 		slog.Info("config ready",

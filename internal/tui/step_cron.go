@@ -28,7 +28,7 @@ func newCronModel(cfg *config.Config, tt *scheduler.Timetable, dryRun bool) cron
 
 	var entries []cron.Entry
 	if tt != nil {
-		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, names, cfg.ClaudePath)
+		entries = cron.GenerateEntries(tt, cfg.Weekdays, dirs, names, cfg.ClaudePath, cfg.Timezone)
 	}
 
 	return cronModel{

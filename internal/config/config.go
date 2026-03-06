@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,7 @@ type Config struct {
 	AvgDevTime  float64   `yaml:"avg_dev_time"`
 	StartTime   string    `yaml:"start_time"`
 	EndTime     string    `yaml:"end_time"`
+	Timezone    string    `yaml:"timezone"`
 	Weekdays    []string  `yaml:"weekdays"`
 	Strategy    string    `yaml:"strategy"`
 	ClaudePath  string    `yaml:"claude_path"`
@@ -68,4 +70,40 @@ func Save(cfg *Config) error {
 func Exists(homeDir string) bool {
 	_, err := os.Stat(ConfigPath(homeDir))
 	return err == nil
+}
+
+// DetectSystemTimezone returns the IANA timezone name of the system.
+// It checks $TZ, then time.Now().Location(), then /etc/localtime symlink,
+// falling back to "UTC".
+func DetectSystemTimezone() string {
+	if tz := os.Getenv("TZ"); tz != "" {
+		if _, err := time.LoadLocation(tz); err == nil {
+			return tz
+		}
+	}
+
+	loc := time.Now().Location().String()
+	if loc != "Local" && loc != "" {
+		return loc
+	}
+
+	// Try parsing /etc/localtime symlink (Linux/macOS)
+	if target, err := os.Readlink("/etc/localtime"); err == nil {
+		// e.g. /usr/share/zoneinfo/America/New_York -> America/New_York
+		const marker = "zoneinfo/"
+		if idx := lastIndex(target, marker); idx >= 0 {
+			return target[idx+len(marker):]
+		}
+	}
+
+	return "UTC"
+}
+
+func lastIndex(s, substr string) int {
+	for i := len(s) - len(substr); i >= 0; i-- {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }

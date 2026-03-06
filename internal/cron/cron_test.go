@@ -3,6 +3,7 @@ package cron
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/armanjr/polyclaude/internal/scheduler"
 )
@@ -98,7 +99,7 @@ func TestGenerateEntries(t *testing.T) {
 	names := []string{"slim-viper", "bold-falcon"}
 	claudePath := "/usr/local/bin/claude"
 
-	entries := GenerateEntries(tt, weekdays, dirs, names, claudePath)
+	entries := GenerateEntries(tt, weekdays, dirs, names, claudePath, "")
 
 	// Account 0: 1 pre-act + 2 post-cycle = 3
 	// Account 1: 1 pre-act + 1 post-cycle = 2
@@ -159,7 +160,7 @@ func TestGenerateEntries_NoBlocks(t *testing.T) {
 			{AccountIndex: 0, PreActivationTime: 7.0},
 		},
 	}
-	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"solo"}, "/bin/claude")
+	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"solo"}, "/bin/claude", "")
 	if len(entries) != 1 {
 		t.Fatalf("len(entries) = %d, want 1 (pre-activation only)", len(entries))
 	}
@@ -181,7 +182,7 @@ func TestGenerateEntries_MidnightWrap(t *testing.T) {
 			},
 		},
 	}
-	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"night-owl"}, "/bin/claude")
+	entries := GenerateEntries(tt, []string{"mon"}, []string{"/dir"}, []string{"night-owl"}, "/bin/claude", "")
 	if len(entries) != 2 {
 		t.Fatalf("len(entries) = %d, want 2", len(entries))
 	}
@@ -205,6 +206,135 @@ func TestLines(t *testing.T) {
 	for i, want := range expected {
 		if lines[i] != want {
 			t.Errorf("lines[%d] = %q, want %q", i, lines[i], want)
+		}
+	}
+}
+
+func TestConvertToCronTime_SameTimezone(t *testing.T) {
+	loc, _ := time.LoadLocation("America/New_York")
+	ct := ConvertToCronTime(9.0, loc, loc)
+	if ct.Hour != 9 || ct.Minute != 0 || ct.DayOffset != 0 {
+		t.Errorf("same tz: got %+v, want {Hour:9 Minute:0 DayOffset:0}", ct)
+	}
+}
+
+func TestConvertToCronTime_ESTtoUTC(t *testing.T) {
+	est, _ := time.LoadLocation("America/New_York")
+	utc, _ := time.LoadLocation("UTC")
+
+	ct := ConvertToCronTime(9.0, est, utc)
+
+	// EST is UTC-5 (or EDT UTC-4), so 09:00 EST -> 14:00 UTC (or 13:00 in EDT)
+	// The offset depends on the current date's DST state.
+	now := time.Now()
+	ref := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, est)
+	expected := ref.In(utc)
+
+	if ct.Hour != expected.Hour() || ct.Minute != expected.Minute() {
+		t.Errorf("EST->UTC: got %02d:%02d, want %02d:%02d", ct.Hour, ct.Minute, expected.Hour(), expected.Minute())
+	}
+	if ct.DayOffset != 0 {
+		t.Errorf("EST->UTC 09:00: expected no day shift, got %d", ct.DayOffset)
+	}
+}
+
+func TestConvertToCronTime_DayCrossForward(t *testing.T) {
+	est, _ := time.LoadLocation("America/New_York")
+	utc, _ := time.LoadLocation("UTC")
+
+	// 23:00 EST -> next day in UTC
+	ct := ConvertToCronTime(23.0, est, utc)
+
+	now := time.Now()
+	ref := time.Date(now.Year(), now.Month(), now.Day(), 23, 0, 0, 0, est)
+	expected := ref.In(utc)
+
+	if ct.Hour != expected.Hour() || ct.Minute != expected.Minute() {
+		t.Errorf("day cross fwd: got %02d:%02d, want %02d:%02d", ct.Hour, ct.Minute, expected.Hour(), expected.Minute())
+	}
+	if ct.DayOffset != 1 {
+		t.Errorf("day cross fwd: expected DayOffset=1, got %d", ct.DayOffset)
+	}
+}
+
+func TestConvertToCronTime_DayCrossBackward(t *testing.T) {
+	utc, _ := time.LoadLocation("UTC")
+	est, _ := time.LoadLocation("America/New_York")
+
+	// 01:00 UTC -> previous day in EST
+	ct := ConvertToCronTime(1.0, utc, est)
+
+	now := time.Now()
+	ref := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, utc)
+	expected := ref.In(est)
+
+	if ct.Hour != expected.Hour() || ct.Minute != expected.Minute() {
+		t.Errorf("day cross back: got %02d:%02d, want %02d:%02d", ct.Hour, ct.Minute, expected.Hour(), expected.Minute())
+	}
+	if ct.DayOffset != -1 {
+		t.Errorf("day cross back: expected DayOffset=-1, got %d", ct.DayOffset)
+	}
+}
+
+func TestShiftWeekdays(t *testing.T) {
+	tests := []struct {
+		name     string
+		days     []string
+		offset   int
+		expected []string
+	}{
+		{"no shift", []string{"mon", "wed", "fri"}, 0, []string{"mon", "wed", "fri"}},
+		{"+1", []string{"mon", "wed", "fri"}, 1, []string{"tue", "thu", "sat"}},
+		{"-1", []string{"mon", "wed", "fri"}, -1, []string{"sun", "tue", "thu"}},
+		{"wrap forward sun", []string{"sun"}, 1, []string{"mon"}},
+		{"wrap backward mon", []string{"mon"}, -1, []string{"sun"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ShiftWeekdays(tt.days, tt.offset)
+			if len(got) != len(tt.expected) {
+				t.Fatalf("len = %d, want %d", len(got), len(tt.expected))
+			}
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("day[%d] = %q, want %q", i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateEntries_WithTimezone(t *testing.T) {
+	est, _ := time.LoadLocation("America/New_York")
+	utc, _ := time.LoadLocation("UTC")
+	_ = est
+	_ = utc
+
+	tt := &scheduler.Timetable{
+		Accounts: []scheduler.AccountSchedule{
+			{
+				AccountIndex:      0,
+				PreActivationTime: 9.0, // 09:00 in user TZ
+				Blocks: []scheduler.Block{
+					{AccountIndex: 0, CycleIndex: 0, Start: 10.0, End: 12.0},
+				},
+			},
+		},
+	}
+
+	entries := GenerateEntries(tt, []string{"mon", "fri"}, []string{"/dir"}, []string{"acct"}, "/bin/claude", "America/New_York")
+	if len(entries) != 2 {
+		t.Fatalf("len(entries) = %d, want 2", len(entries))
+	}
+
+	// Verify entries contain converted times (exact values depend on system TZ)
+	// At minimum, verify the entries were generated and contain expected structure
+	for _, e := range entries {
+		if !strings.Contains(e.Line, "/bin/claude") {
+			t.Errorf("entry missing claude path: %s", e.Line)
+		}
+		if !strings.Contains(e.Line, "CLAUDE_CONFIG_DIR=/dir") {
+			t.Errorf("entry missing config dir: %s", e.Line)
 		}
 	}
 }

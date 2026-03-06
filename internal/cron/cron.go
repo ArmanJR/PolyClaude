@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/armanjr/polyclaude/internal/scheduler"
 )
@@ -116,13 +117,86 @@ func Lines(entries []Entry) []string {
 	return out
 }
 
+// CronTime holds the system-local hour, minute, and day offset resulting from
+// converting a user-timezone time to the system timezone.
+type CronTime struct {
+	Hour      int // 0-23
+	Minute    int // 0-59
+	DayOffset int // -1, 0, or +1
+}
+
+// ConvertToCronTime converts a fractional-hours time in userLoc to systemLoc,
+// returning the system-local hour/minute and any day shift.
+func ConvertToCronTime(userHours float64, userLoc, systemLoc *time.Location) CronTime {
+	ct := scheduler.HoursToClockTime(userHours)
+	now := time.Now()
+	// Build a time in the user's timezone using today's date
+	userTime := time.Date(now.Year(), now.Month(), now.Day(), ct.Hour, ct.Minute, 0, 0, userLoc)
+	sysTime := userTime.In(systemLoc)
+
+	dayOffset := sysTime.Day() - userTime.Day()
+	// Clamp to -1..+1 (handles month boundaries)
+	if dayOffset > 1 {
+		dayOffset = -1
+	} else if dayOffset < -1 {
+		dayOffset = 1
+	}
+
+	return CronTime{
+		Hour:      sysTime.Hour(),
+		Minute:    sysTime.Minute(),
+		DayOffset: dayOffset,
+	}
+}
+
+// weekdayIndex maps 3-letter day names to 0-6 (mon=0 .. sun=6).
+var weekdayIndex = map[string]int{
+	"mon": 0, "tue": 1, "wed": 2, "thu": 3,
+	"fri": 4, "sat": 5, "sun": 6,
+}
+
+// weekdayName maps 0-6 back to 3-letter day names.
+var weekdayName = [7]string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+
+// ShiftWeekdays shifts each weekday name by offset using modular arithmetic.
+func ShiftWeekdays(weekdays []string, offset int) []string {
+	if offset == 0 {
+		return weekdays
+	}
+	shifted := make([]string, len(weekdays))
+	for i, day := range weekdays {
+		idx := weekdayIndex[strings.ToLower(day)]
+		newIdx := ((idx + offset) % 7 + 7) % 7
+		shifted[i] = weekdayName[newIdx]
+	}
+	return shifted
+}
+
 // GenerateEntries produces cron entries from a timetable.
 // Each account gets a pre-activation entry and post-cycle entries (1 min after each block ends).
 // claudePath must be the absolute path to the claude binary (cron has a minimal PATH).
-func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string) []Entry {
-	dow := strings.Join(weekdays, ",")
-	var entries []Entry
+// userTZ is the IANA timezone of the user's schedule times. If empty, no conversion is done.
+func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []string, accountNames []string, claudePath string, userTZ string) []Entry {
+	var userLoc, systemLoc *time.Location
+	convertTZ := false
+	if userTZ != "" {
+		var err error
+		userLoc, err = time.LoadLocation(userTZ)
+		if err != nil {
+			slog.Error("failed to load user timezone, skipping conversion", "timezone", userTZ, "error", err)
+		} else {
+			systemLoc = time.Now().Location()
+			if userLoc.String() != systemLoc.String() {
+				convertTZ = true
+				slog.Info("timezone conversion enabled",
+					"user_tz", userLoc.String(),
+					"system_tz", systemLoc.String())
+				slog.Warn("DST caveat: cron entries use current UTC offset; if DST changes the offset, entries will be off by ~1 hour until re-run")
+			}
+		}
+	}
 
+	var entries []Entry
 	for _, acct := range tt.Accounts {
 		if acct.AccountIndex >= len(accountDirs) {
 			continue
@@ -131,25 +205,48 @@ func GenerateEntries(tt *scheduler.Timetable, weekdays []string, accountDirs []s
 		label := accountNames[acct.AccountIndex]
 
 		// Pre-activation
-		ct := scheduler.HoursToClockTime(acct.PreActivationTime)
-		entries = append(entries, Entry{
-			Comment: fmt.Sprintf("# pre-activation: %s", label),
-			Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
-				ct.Minute, ct.Hour, dow, dir, claudePath),
-		})
+		entries = append(entries, buildEntry(
+			acct.PreActivationTime, weekdays, dir, label, claudePath,
+			fmt.Sprintf("# pre-activation: %s", label),
+			convertTZ, userLoc, systemLoc,
+		))
 
 		// Post-cycle: 1 min after each block ends
 		for _, block := range acct.Blocks {
-			pt := scheduler.HoursToClockTime(block.End + 1.0/60.0)
-			entries = append(entries, Entry{
-				Comment: fmt.Sprintf("# post-cycle: %s, cycle %d", label, block.CycleIndex+1),
-				Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
-					pt.Minute, pt.Hour, dow, dir, claudePath),
-			})
+			entries = append(entries, buildEntry(
+				block.End+1.0/60.0, weekdays, dir, label, claudePath,
+				fmt.Sprintf("# post-cycle: %s, cycle %d", label, block.CycleIndex+1),
+				convertTZ, userLoc, systemLoc,
+			))
 		}
 
 		slog.Info("generated cron entries", "account", label,
 			"pre_activation", 1, "post_cycle", len(acct.Blocks))
 	}
 	return entries
+}
+
+func buildEntry(hours float64, weekdays []string, dir, _, claudePath, comment string, convertTZ bool, userLoc, systemLoc *time.Location) Entry {
+	var minute, hour int
+	dow := strings.Join(weekdays, ",")
+
+	if convertTZ {
+		ct := ConvertToCronTime(hours, userLoc, systemLoc)
+		minute = ct.Minute
+		hour = ct.Hour
+		if ct.DayOffset != 0 {
+			shifted := ShiftWeekdays(weekdays, ct.DayOffset)
+			dow = strings.Join(shifted, ",")
+		}
+	} else {
+		ct := scheduler.HoursToClockTime(hours)
+		minute = ct.Minute
+		hour = ct.Hour
+	}
+
+	return Entry{
+		Comment: comment,
+		Line: fmt.Sprintf("%d %d * * %s CLAUDE_CONFIG_DIR=%s %s -p \"say hi\"",
+			minute, hour, dow, dir, claudePath),
+	}
 }

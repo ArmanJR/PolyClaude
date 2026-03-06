@@ -16,10 +16,11 @@ const (
 	fieldAvgDevTime  = 2
 	fieldStartTime   = 3
 	fieldEndTime     = 4
-	fieldWeekdays    = 5
-	fieldStrategy    = 6
-	fieldSubmit      = 7
-	numFields        = 8
+	fieldTimezone    = 5
+	fieldWeekdays    = 6
+	fieldStrategy    = 7
+	fieldSubmit      = 8
+	numFields        = 9
 )
 
 type inputsModel struct {
@@ -37,7 +38,7 @@ var weekdayNames = [7]string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
 var strategyNames = [2]string{"spread", "bunch"}
 
 func newInputsModel(dryRun bool) inputsModel {
-	inputs := make([]textinput.Model, 5)
+	inputs := make([]textinput.Model, 6)
 
 	homeDir, _ := config.DefaultHomeDir()
 
@@ -71,6 +72,13 @@ func newInputsModel(dryRun bool) inputsModel {
 	inputs[4].SetWidth(10)
 	inputs[4].Prompt = ""
 	inputs[4].CharLimit = 5
+
+	detectedTZ := config.DetectSystemTimezone()
+	inputs[5] = textinput.New()
+	inputs[5].Placeholder = detectedTZ
+	inputs[5].SetWidth(30)
+	inputs[5].Prompt = ""
+	inputs[5].CharLimit = 40
 
 	return inputsModel{
 		inputs:     inputs,
@@ -235,6 +243,15 @@ func (m inputsModel) submit() (inputsModel, tea.Cmd) {
 		return m, nil
 	}
 
+	timezone := m.inputs[5].Value()
+	if timezone == "" {
+		timezone = config.DetectSystemTimezone()
+	}
+	if err := config.ValidateTimezone(timezone); err != nil {
+		m.err = "Invalid timezone: " + err.Error()
+		return m, nil
+	}
+
 	// Collect selected weekdays
 	var weekdays []string
 	for i, selected := range m.weekdaySel {
@@ -259,6 +276,7 @@ func (m inputsModel) submit() (inputsModel, tea.Cmd) {
 			avgDevTime:  avgDevTime,
 			startTime:   startTime,
 			endTime:     endTime,
+			timezone:    timezone,
 			weekdays:    weekdays,
 			strategy:    strategy,
 		}
@@ -271,6 +289,7 @@ type configReadyMsg struct {
 	avgDevTime  float64
 	startTime   string
 	endTime     string
+	timezone    string
 	weekdays    []string
 	strategy    string
 }
@@ -283,12 +302,14 @@ func (m inputsModel) view() string {
 		label string
 		desc  string
 	}
+	detectedTZ := config.DetectSystemTimezone()
 	fields := []field{
 		{"Home directory", "Where PolyClaude stores its config and account data"},
 		{"Number of accounts", "How many Claude Pro accounts do you have?"},
 		{"Avg dev time (hours)", "How long until you typically hit the rate limit per cycle?"},
 		{"Start time (HH:MM)", "When you usually start coding (24h format)"},
 		{"End time (HH:MM)", "When you usually stop coding (24h format)"},
+		{"Timezone (IANA)", fmt.Sprintf("Your timezone for schedule times (detected: %s)", detectedTZ)},
 	}
 
 	for i, f := range fields {
