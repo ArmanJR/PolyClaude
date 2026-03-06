@@ -59,7 +59,7 @@ func (m sanityModel) runCheck(index int) tea.Cmd {
 	}
 	dir := m.config.Accounts[index].Dir
 	return func() tea.Msg {
-		passed, err := accounts.RunSanityCheck(dir)
+		passed, err := accounts.RunSanityCheck(dir, m.config.ClaudePath)
 		errStr := ""
 		if err != nil {
 			errStr = err.Error()

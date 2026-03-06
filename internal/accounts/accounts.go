@@ -77,8 +77,8 @@ func VerifyLogin(accountDir string) bool {
 
 // RunSanityCheck runs `claude -p "say hi"` with the account's config dir
 // and checks the output contains "hi".
-func RunSanityCheck(accountDir string) (bool, error) {
-	cmd := exec.Command("claude", "-p", "say hi")
+func RunSanityCheck(accountDir, claudePath string) (bool, error) {
+	cmd := exec.Command(claudePath, "-p", "say hi")
 	cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR="+accountDir)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
