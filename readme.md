@@ -2,6 +2,23 @@
 
 Schedule multiple Claude Code Pro accounts to minimize rate-limit downtime.
 
+## TL;DR
+
+Using combinatorial optimization, PolyClaude:
+
+- **Fills the gap between Claude Code Pro and Max plans**: stack multiple $20 Pro accounts to get near-Max capacity at a fraction of the cost, without the $100 jump.
+- **Pre-warms usage sessions automatically**: sends throwaway prompts at optimal times so your 5-hour cycles are already aligned when you start coding.
+
+Prepare an always-on device (cheap VPS, Raspberry Pi, old laptop, etc.), then:
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/ArmanJR/PolyClaude/main/install.sh | sh
+```
+
+Run `polyclaude` and follow the interactive setup wizard.
+
+---
+
 ## The Problem
 
 Claude Code Pro ($20/mo) starts a 5-hour usage cycle with your first prompt. With heavy usage, you hit the rate limit well before the cycle resets. Upgrading to Max ($100/mo) is a 5x price jump with no middle ground.
@@ -61,39 +78,47 @@ Both strategies achieve the same total coding time. They differ in how cooldown 
 
 ## Installation
 
-Requires the [Claude CLI](https://docs.anthropic.com/en/docs/claude-code).
+### Requirements
+
+PolyClaude uses cron jobs to send pre-activation prompts on a schedule, so it needs to run on an **always-on Linux or macOS device with internet access**.
+
+Good options:
+- **Budget VPS** — Hetzner, IONOS, Hostinger, etc. (cheapest tier is fine)
+- **Raspberry Pi** — Zero W 2, Pi 3, 4, or 5
+- **Old device** — any spare laptop or desktop that stays powered on
+
+You also need:
+- [**Claude CLI**](https://docs.anthropic.com/en/docs/claude-code) installed (`curl -fsSL https://claude.ai/install.sh | bash`)
+- **cron** — standard on Linux; on macOS, ensure cron has Full Disk Access in System Settings > Privacy & Security
+
+### Install
 
 ```sh
 curl -sSfL https://raw.githubusercontent.com/ArmanJR/PolyClaude/main/install.sh | sh
 ```
 
-Or with Go: `go install github.com/armanjr/polyclaude@latest`
-
 ## Usage
 
-```sh
-polyclaude            # Interactive setup wizard
-polyclaude --dry-run  # Preview without making changes
+```
+polyclaude              Launch the interactive setup wizard
+polyclaude update       Download and install the latest version
+polyclaude --dry-run    Preview the wizard without making changes
+polyclaude --version    Print version and exit
+polyclaude --help       Show help
 ```
 
 The wizard walks you through:
 
-1. **Verify** — Checks that the Claude CLI is installed
+1. **Verify** — Checks that the Claude CLI and cron are installed
 2. **Configure** — Home directory, number of accounts, avg dev time, coding window, weekdays, strategy
 3. **Login** — Guides you through `claude /login` for each account in an isolated config directory
 4. **Sanity check** — Runs `claude -p "say hi"` per account to verify auth
 5. **Schedule** — Displays the computed schedule with pre-activation times, block timeline, and post-cycle activation times
-6. **Cron** — Installs pre-activation and post-cycle cron jobs (with confirmation)
+6. **Cron** — Installs pre-activation and post-cycle cron jobs
 
 ### Re-running
 
 Re-running is safe and idempotent — cron entries are managed between `# BEGIN polyclaude` / `# END polyclaude` markers. If an existing config is found, you'll be prompted to start fresh or exit.
-
-### Requirements
-
-- **Claude CLI** (`curl -fsSL https://claude.ai/install.sh | bash`)
-- **cron** — standard on Linux; available on macOS (ensure cron has Full Disk Access in System Settings > Privacy & Security)
-- **Machine must be awake** when cron jobs fire. If your machine sleeps before a pre-activation or post-cycle time, that prompt won't be sent and the corresponding cycle recovery may be delayed.
 
 ---
 
@@ -160,6 +185,10 @@ The scheduling problem is a constrained interval-packing problem with periodic r
 
 Where T=5h (fixed cycle length), x=avg dev time, W=coding window, n=number of accounts.
 
+## Known Limitations
+
+- **Fixed average dev time**: The schedule is built around a single `avg_dev_time` value, but in practice usage varies session to session. 
+
 ## License
 
-MIT
+MIT — if you use PolyClaude or build on it, a mention or link back to this repo is appreciated.
