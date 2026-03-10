@@ -8,7 +8,7 @@ final class UsageService {
     var accounts: [AccountUsage] = []
     var isLoading = false
     var errorMessage: String?
-    var lastFetchTime: Date?
+    var activeEmail: String?
 
     @ObservationIgnored
     private var serverURL: String = UserDefaults.standard.string(forKey: "serverURL")
@@ -56,8 +56,8 @@ final class UsageService {
             }
 
             accounts = result
-            lastFetchTime = Date()
-            Self.logger.info("Fetched \(result.count) account(s)")
+            activeEmail = Self.readActiveEmail()
+            Self.logger.info("Fetched \(result.count) account(s), active: \(self.activeEmail ?? "unknown")")
         } catch let error as URLError {
             Self.logger.error("Network error: \(error.localizedDescription)")
             errorMessage = "Cannot reach server: \(error.localizedDescription)"
@@ -65,6 +65,19 @@ final class UsageService {
             Self.logger.error("Decode error: \(error.localizedDescription)")
             errorMessage = "Failed to parse response: \(error.localizedDescription)"
         }
+    }
+
+    private static func readActiveEmail() -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let claudeJSON = home.appendingPathComponent(".claude.json")
+        guard let data = try? Data(contentsOf: claudeJSON),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let oauth = json["oauthAccount"] as? [String: Any],
+              let email = oauth["emailAddress"] as? String else {
+            Self.logger.warning("Could not read active account from ~/.claude.json")
+            return nil
+        }
+        return email
     }
 
     func testConnection(url: String) async -> (Bool, String) {

@@ -38,14 +38,7 @@ struct UsageMenuView: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, 2)
-
-            // Last fetch time
-            Text("Fetched: \(lastFetchText)")
-                .font(.system(size: fontSize - 3))
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 6)
+            .padding(.bottom, 8)
 
             Divider()
 
@@ -75,7 +68,7 @@ struct UsageMenuView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(service.accounts.enumerated()), id: \.element.id) { index, account in
-                            AccountUsageRow(account: account, fontSize: fontSize)
+                            AccountUsageRow(account: account, fontSize: fontSize, isActive: account.email == service.activeEmail)
                                 .padding(.horizontal, 12)
                             if index < service.accounts.count - 1 {
                                 Divider()
@@ -121,11 +114,5 @@ struct UsageMenuView: View {
         .frame(width: max(340, fontSize * 26))
     }
 
-    private var lastFetchText: String {
-        guard let time = service.lastFetchTime else { return "never" }
-        let elapsed = Date().timeIntervalSince(time)
-        if elapsed < 60 { return "just now" }
-        let mins = Int(elapsed / 60)
-        return "\(mins)m ago"
-    }
+
 }

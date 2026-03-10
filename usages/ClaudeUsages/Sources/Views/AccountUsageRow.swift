@@ -3,6 +3,7 @@ import SwiftUI
 struct AccountUsageRow: View {
     let account: AccountUsage
     let fontSize: Double
+    var isActive: Bool = false
 
     private var labelFont: Font { .system(size: fontSize - 1) }
     private var valueFont: Font { .system(size: fontSize - 1, design: .monospaced) }
@@ -17,6 +18,14 @@ struct AccountUsageRow: View {
                 Text(account.email)
                     .font(.system(size: fontSize, weight: .semibold))
                     .lineLimit(1)
+                if isActive {
+                    Text("ACTIVE")
+                        .font(.system(size: fontSize - 4, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color(red: 0.18, green: 0.55, blue: 0.24), in: Capsule())
+                }
                 if account.hasRecentError {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)
@@ -42,7 +51,7 @@ struct AccountUsageRow: View {
             // Extra usage
             if let extra = account.extraUsage, extra.isEnabled {
                 HStack {
-                    Text("Extra Usage")
+                    Text("Extra")
                         .font(labelFont)
                         .foregroundStyle(.secondary)
                         .frame(width: labelWidth, alignment: .leading)
