@@ -26,6 +26,14 @@ struct AccountUsageRow: View {
                         .padding(.vertical, 1)
                         .background(Color(red: 0.18, green: 0.55, blue: 0.24), in: Capsule())
                 }
+                if account.fiveHour?.isIdle == true {
+                    Text("IDLE")
+                        .font(.system(size: fontSize - 4, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.gray, in: Capsule())
+                }
                 if account.hasRecentError {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)
@@ -71,9 +79,9 @@ struct AccountUsageRow: View {
                     .font(labelFont)
                     .foregroundStyle(.secondary)
                     .frame(width: labelWidth, alignment: .leading)
-                ProgressView(value: min(limit.utilization, 100), total: 100)
-                    .tint(limit.utilizationColor)
-                Text("\(Int(limit.utilization))%")
+                ProgressView(value: min(limit.effectiveUtilization, 100), total: 100)
+                    .tint(limit.isIdle ? .gray : limit.utilizationColor)
+                Text("\(Int(limit.effectiveUtilization))%")
                     .font(valueFont)
                     .frame(width: percentWidth, alignment: .trailing)
             }

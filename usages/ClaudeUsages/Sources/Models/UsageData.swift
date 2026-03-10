@@ -42,6 +42,15 @@ struct UsageLimit: Codable {
         return "in <1m"
     }
 
+    var isIdle: Bool {
+        guard let date = resetsAtDate else { return true }
+        return date <= Date()
+    }
+
+    var effectiveUtilization: Double {
+        isIdle ? 0 : utilization
+    }
+
     var utilizationColor: Color {
         switch utilization {
         case 0..<50: return .green

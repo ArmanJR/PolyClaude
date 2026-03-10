@@ -32,7 +32,7 @@ struct ClaudeUsagesApp: App {
         let parts = service.accounts.compactMap { account -> String? in
             guard let fiveHour = account.fiveHour else { return nil }
             let isActive = account.email == service.activeEmail
-            let pct = "\(Int(fiveHour.utilization))%"
+            let pct = "\(Int(fiveHour.effectiveUtilization))%"
             return isActive ? "[\(pct)]" : pct
         }
         if parts.isEmpty {
