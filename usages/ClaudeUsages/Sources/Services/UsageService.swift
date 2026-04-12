@@ -14,6 +14,21 @@ final class UsageService {
     private var serverURL: String = UserDefaults.standard.string(forKey: "serverURL")
         ?? "http://pi:8080/claude-usages"
 
+    @ObservationIgnored
+    private var pollingTask: Task<Void, Never>?
+
+    func startPolling(interval: Duration = .seconds(60)) {
+        guard pollingTask == nil else { return }
+        Self.logger.info("Starting background polling every \(interval)")
+        pollingTask = Task {
+            while !Task.isCancelled {
+                Self.logger.info("Polling — fetching usage data")
+                await fetch()
+                try? await Task.sleep(for: interval)
+            }
+        }
+    }
+
     func fetch() async {
         let url = UserDefaults.standard.string(forKey: "serverURL") ?? "http://pi:8080/claude-usages"
         serverURL = url

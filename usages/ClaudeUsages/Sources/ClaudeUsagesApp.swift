@@ -5,20 +5,17 @@ import os
 struct ClaudeUsagesApp: App {
     private static let logger = Logger(subsystem: "com.polyclaude.ClaudeUsages", category: "App")
 
-    @State private var service = UsageService()
+    @State private var service: UsageService = {
+        let s = UsageService()
+        s.startPolling()
+        return s
+    }()
 
     var body: some Scene {
         MenuBarExtra {
             UsageMenuView(service: service)
-                .task {
-                    while !Task.isCancelled {
-                        Self.logger.info("Polling — fetching usage data")
-                        await service.fetch()
-                        try? await Task.sleep(for: .seconds(60))
-                    }
-                }
         } label: {
-            menuBarLabel
+            MenuBarLabel(service: service)
         }
         .menuBarExtraStyle(.window)
 
@@ -26,9 +23,15 @@ struct ClaudeUsagesApp: App {
             SettingsView(service: service)
         }
     }
+}
 
-    @ViewBuilder
-    private var menuBarLabel: some View {
+/// Menu bar icon label. Must be a real `View` (not a computed property on `App`)
+/// so SwiftUI's `@Observable` tracking re-renders it when `service.accounts` or
+/// `service.activeEmail` change during background polling.
+private struct MenuBarLabel: View {
+    let service: UsageService
+
+    var body: some View {
         let parts = service.accounts.compactMap { account -> String? in
             guard let fiveHour = account.fiveHour else { return nil }
             let isActive = account.email == service.activeEmail
